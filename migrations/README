@@ -1,0 +1,5 @@
+Generic single-database configuration with an async dbapi.
+    op.execute(
+        "INSERT INTO parcel_type(id, name) VALUES (1, 'одежда'), (2, 'электроника'), (3, 'разное')"
+    )
+        op.execute("DELETE FROM parcel_type WHERE id IN (1, 2, 3)")

@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  redis:
+    container_name: redis
+    image: redis
+    volumes:
+      - redis_vol:/data
+    networks:
+      - delivery_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 3
+      timeout: 10s
+    restart: always
+
+  mysql:
+    container_name: mysql
+    image: mysql:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: parcel
+    volumes:
+      - mysql_vol:/var/lib/mysql
+    networks:
+      - delivery_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping"]
+      interval: 10s
+      retries: 3
+      timeout: 20s
+    restart: always
+  rabbit:
+    container_name: rabbit
+    image: rabbitmq:management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_vol:/var/lib/rabbitmq/mnesia
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      retries: 5
+      timeout: 20s
+    networks:
+      - delivery_net
+    restart: always
+  
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: microservice_delivery
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_NAME: parcel
+      MYSQL_USER: root
+      MYSQL_PASS: password
+      RABBIT_USER: guest
+      RABBIT_PASS: guest
+      RABBIT_HOST: rabbit
+      RABBIT_PORT: 5672
+      RABBIT_QUEUE: parcel_queue
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ADMIN_SESSION: 123
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - delivery_net
+    command: bash -c 'alembic --config alembic.ini upgrade head && gunicorn --bind 0.0.0.0:8000 main:app --worker-class uvicorn.workers.UvicornWorker --reload'
+    restart: always
+
+volumes:
+  mysql_vol:
+    name: mysql_vol
+  rabbitmq_vol:
+    name: rabbitmq_vol
+  redis_vol:
+    name: redis_vol
+
+networks:
+  delivery_net:
+    name: delivery_net
+    driver: bridge
